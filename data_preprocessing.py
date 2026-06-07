@@ -1,88 +1,126 @@
 ﻿import argparse
+import glob
+from functools import reduce
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, input_file_name, regexp_extract, when
+from pyspark.sql.functions import col, input_file_name, lit, regexp_extract, when
+
+from brfss_config import DATA_DIR, SELECTED_COLUMNS
 
 
-#로컬 테스트 용
-INPUT_PATH = "./data/part_*.csv"
-OUTPUT_PATH = "./data/cleaned_cardio_data"
+INPUT_PATH = f"{DATA_DIR}/part_*.csv"
+OUTPUT_PATH = f"{DATA_DIR}/cleaned_cardio_data"
 
-# 빅데프 기말 프로젝트 분석에 핵심이 될 컬럼들
-SELECTED_COLS = [
-    "YEAR",
-    "CVDINFR4",  # 심근경색 경험이 있는가? => 1=Yes, 2=No
-    "BPHIGH4",   # 고혈압을 진단받은 적이 있는가? => 1=Yes, 3=No
-    "TOLDHI2",   # 고콜레스테롤인가? => 1=Yes, 2=No
-    "DIABETE3",  # 당뇨 진단을 받은 적이 있는가? => 1=Yes, 3=No
-    "SMOKE100",  # 흡연자인가? => 1=Yes, 2=No
-    "SEX",
-    "_AGEG5YR",
-    "_BMI5",
-]
 
-# 설문조사 결과를 단순하게 있나, 없나로 구분
+def parse_args():
+    parser = argparse.ArgumentParser(description="BRFSS 데이터 전처리 스크립트")
+    parser.add_argument("--input", nargs="+", default=[INPUT_PATH], help="원본 CSV 파일 경로")
+    parser.add_argument("--output", default=OUTPUT_PATH, help="정제된 데이터 저장 경로")
+    return parser.parse_args()
+
+
+def normalize_input_path(input_path):
+    if isinstance(input_path, list):
+        return input_path[0] if len(input_path) == 1 else input_path
+    return input_path
+
+
+def list_input_files(spark, input_path):
+    input_path = normalize_input_path(input_path)
+    if isinstance(input_path, list):
+        return input_path
+
+    if any(mark in input_path for mark in ["*", "?", "["]):
+        local_matches = sorted(glob.glob(input_path))
+        if local_matches:
+            return local_matches
+
+        hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+        path_obj = spark._jvm.org.apache.hadoop.fs.Path(input_path)
+        statuses = path_obj.getFileSystem(hadoop_conf).globStatus(path_obj)
+        if statuses:
+            return [str(status.getPath()) for status in statuses]
+
+    return [input_path]
+
+
 def convert_to_binary(column_name, yes_val, no_val):
     return when(col(column_name) == yes_val, 1).when(col(column_name) == no_val, 0)
 
-def main():
-    parser = argparse.ArgumentParser(description="BRFSS 데이터 전처리 스크립트")
-    parser.add_argument("--input", default=INPUT_PATH, help="원본 CSV 파일 경로")
-    parser.add_argument("--output", default=OUTPUT_PATH, help="정제된 데이터 저장 경로")
-    args = parser.parse_args()
 
-    input_path = args.input[0] if isinstance(args.input, list) else args.input
-
-    print("Spark 데이터 전처리 시작")
-
-    spark = SparkSession.builder \
-        .appName("BRFSS_Data_Preprocessing") \
-        .getOrCreate()
-
-    print("1. 원본 데이터 불러오는 중")
-    df_raw = spark.read.csv(input_path, header=True, inferSchema=True)
-    
-    # 필요한 컬럼 빼고 나머지 전부 정수형 변환
-    df_selected = df_raw.select([col(c) for c in SELECTED_COLS])
-    for c in SELECTED_COLS:
-        df_selected = df_selected.withColumn(c, col(c).cast("int"))
-
-    # 데이터 정제
-    print("2. 결측치 및 타겟 변수 정제 진행")
-    
-    # 심근경색(CVDINFR4) 응답이 아예 없는(NULL) 데이터 삭제
-    df_clean = df_selected.dropna(subset=["CVDINFR4"])
-    
-    # 모름/응답거부(7, 9) 값 제외하고 확실히 응답(1, 2)만 필터링
-    df_clean = df_clean.filter(col("CVDINFR4").isin([1, 2]))
-
-    # 파생 변수 1: 타겟 변수 (심근경색 걸렸으면 1, 아니면 0)
-    df_clean = df_clean.withColumn("Has_Disease", when(col("CVDINFR4") == 1, 1).otherwise(0))
-    
-    # 파생 변수 2: BMI 수치
-    df_clean = df_clean.withColumn("BMI_Real", col("_BMI5") / 100)
-
-    # 파생 변수 3: 위험 요인들 이진화 작업 (고혈압, 콜레스테롤, 당뇨, 흡연)
-    df_clean = df_clean.withColumn("BP_Risk", convert_to_binary("BPHIGH4", 1, 3))
-    df_clean = df_clean.withColumn("Cholesterol_Risk", convert_to_binary("TOLDHI2", 1, 2))
-    df_clean = df_clean.withColumn("Diabetes_Risk", convert_to_binary("DIABETE3", 1, 3))
-    df_clean = df_clean.withColumn("Smoking_Risk", convert_to_binary("SMOKE100", 1, 2))
-
-    # 파생 변수 4: 복합 위험 점수 (0 ~ 4점)
-    # 위험 요인이 몇 개나 겹치는지 확인
-    df_clean = df_clean.withColumn(
-        "Risk_Score",
-        col("BP_Risk") + col("Cholesterol_Risk") + col("Diabetes_Risk") + col("Smoking_Risk")
+def read_one_file(spark, file_path):
+    df = spark.read.csv(file_path, header=True, inferSchema=True)
+    df = df.withColumn(
+        "YEAR",
+        regexp_extract(input_file_name(), r"part_(\d{4})_", 1).cast("int"),
     )
 
+    for column_name in SELECTED_COLUMNS:
+        if column_name not in df.columns:
+            df = df.withColumn(column_name, lit(None))
+
+    return df.select([col(column_name) for column_name in SELECTED_COLUMNS])
+
+
+def cast_columns(df):
+    for column_name in SELECTED_COLUMNS:
+        if column_name == "_BMI5":
+            df = df.withColumn(column_name, col(column_name).cast("float"))
+        else:
+            df = df.withColumn(column_name, col(column_name).cast("int"))
+    return df
+
+
+def add_analysis_columns(df):
+    df = df.withColumn("Has_Disease", when(col("CVDINFR4") == 1, 1).otherwise(0))
+    df = df.withColumn("BMI_Real", col("_BMI5") / 100)
+
+    df = df.withColumn("BP_Risk", convert_to_binary("BPHIGH4", 1, 3))
+    df = df.withColumn("Cholesterol_Risk", convert_to_binary("TOLDHI2", 1, 2))
+    df = df.withColumn("Diabetes_Risk", convert_to_binary("DIABETE3", 1, 3))
+    df = df.withColumn("Smoking_Risk", convert_to_binary("SMOKE100", 1, 2))
+
+    return df.withColumn(
+        "Risk_Score",
+        col("BP_Risk") + col("Cholesterol_Risk") + col("Diabetes_Risk") + col("Smoking_Risk"),
+    )
+
+
+def main():
+    args = parse_args()
+    print("Spark 데이터 전처리 시작")
+
+    spark = SparkSession.builder.appName("BRFSS_Data_Preprocessing").getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR")
+
+    print("1. 원본 데이터 불러오는 중")
+    input_files = list_input_files(spark, args.input)
+    print("읽을 파일 개수:", len(input_files))
+    if not input_files:
+        raise ValueError("입력 CSV 파일을 찾지 못했습니다.")
+
+    raw_dfs = [read_one_file(spark, file_path) for file_path in input_files]
+    df_raw = reduce(lambda left, right: left.unionByName(right), raw_dfs)
+    df_raw = cast_columns(df_raw)
+
+    print("2. 결측치 및 타겟 변수 정제 진행")
+    df_clean = df_raw.dropna(subset=["CVDINFR4"])
+    df_clean = df_clean.filter(col("CVDINFR4").isin([1, 2]))
+    df_clean = add_analysis_columns(df_clean)
+
+    print("연도별 정제 데이터 건수")
+    df_clean.groupBy("YEAR").count().orderBy("YEAR").show()
+
     print("데이터 정제 완료")
+    print("정제 데이터 건수:", df_clean.count())
     df_clean.show(5)
 
-    # HDFS 또는 로컬에 저장
     print("3. 정제된 데이터 저장")
-    df_clean.write.mode("overwrite").csv(args.output, header=True)
-    
+    df_clean.coalesce(1).write.mode("overwrite").csv(args.output, header=True)
+
     spark.stop()
     print("데이터 전처리 완료")
+
 
 if __name__ == "__main__":
     main()

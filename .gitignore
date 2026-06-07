@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -11,6 +11,7 @@ kaggle.json
 # Large raw / processed data
 /data/part_*.csv
 /data/*.zip
+/data/*_formats.json
 /data/cleaned_cardio_data/
 /data/analysis_results/
 
