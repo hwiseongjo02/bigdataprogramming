@@ -38,7 +38,7 @@ def main():
         .appName("BRFSS_Data_Preprocessing") \
         .getOrCreate()
 
-    print(f"1. 원본 데이터 불러오는 중")
+    print("1. 원본 데이터 불러오는 중")
     df_raw = spark.read.csv(input_path, header=True, inferSchema=True)
     
     # 필요한 컬럼 빼고 나머지 전부 정수형 변환
@@ -74,11 +74,11 @@ def main():
         col("BP_Risk") + col("Cholesterol_Risk") + col("Diabetes_Risk") + col("Smoking_Risk")
     )
 
-    print(f"정제 완료. 최종 데이터 건수: {df_clean.count()}건")
+    print("데이터 정제 완료")
     df_clean.show(5)
 
     # HDFS 또는 로컬에 저장
-    print(f"3. 정제된 데이터 저장")
+    print("3. 정제된 데이터 저장")
     df_clean.write.mode("overwrite").csv(args.output, header=True)
     
     spark.stop()

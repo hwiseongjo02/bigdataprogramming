@@ -17,10 +17,10 @@ def run_and_save_query(spark, query_name, sql_query, output_dir):
     pd_result = df_result.toPandas()
     
     # 한글 깨짐 방지
-    csv_path = output_dir / f"{query_name}.csv"
+    csv_path = output_dir / "{}.csv".format(query_name)
     pd_result.to_csv(csv_path, index=False, encoding="utf-8-sig")
     
-    print(f"[{query_name}] 분석 결과 저장 완료 => {csv_path}")
+    print("분석 결과 저장 완료")
     return pd_result
 
 def draw_bar_graph(data, x_col, y_col, title, x_label, y_label, file_path, color_palette):
@@ -34,7 +34,7 @@ def draw_bar_graph(data, x_col, y_col, title, x_label, y_label, file_path, color
     
     plt.savefig(file_path, dpi=150)
     plt.close()
-    print(f"그래프 저장 완료 => {file_path}")
+    print("그래프 저장 완료")
 
 def main():
     parser = argparse.ArgumentParser(description="BRFSS 심근경색 분석 및 시각화")
