@@ -19,7 +19,7 @@ if [ "$USE_HDFS" = "1" ]; then
   
   # 1. 데이터 수집 & HDFS 업로드
   echo ">>> 1. 데이터 수집하고 HDFS에 적재"
-  python3 data_collection.py --upload-hdfs
+  python data_collection.py --upload-hdfs
   
   # 2. Spark 분산 전처리
   echo ">>> 2. Spark 데이터 정제"
