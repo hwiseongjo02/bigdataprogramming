@@ -333,3 +333,7 @@ spark-submit data_preprocessing.py \
   - pandas Documentation: https://pandas.pydata.org/docs/
   - Matplotlib Documentation: https://matplotlib.org/stable/
   - Seaborn Documentation: https://seaborn.pydata.org/
+
+## 12. AI Tool Usage
+
+- ChatGPT/Codex: 참고 자료 탐색, Sandbox 환경에서 발생한 파이썬 버전 관련 오류 디버깅, 프로젝트 파이프라인 최적화, 시각화 자료 가독성 향상 방안 제시, README 구조 점검
