@@ -10,7 +10,7 @@ set -e
 # USE_HDFS=1이면 원본/정제 데이터를 HDFS 기준으로 읽고 쓴다.
 USE_HDFS="${USE_HDFS:-0}"
 
-# MAX_CHUNKS=0은 모든 청크를 사용한다. 작은 값은 빠른 테스트용이다.
+# MAX_CHUNKS=0은 모든 청크를 사용한다.
 MAX_CHUNKS="${MAX_CHUNKS:-0}"
 
 # 분석 결과 CSV와 그래프 이미지가 저장되는 폴더이다.
@@ -54,7 +54,7 @@ echo "Python: $PYTHON_CMD"
 echo "Max chunks: $MAX_CHUNKS"
 
 if [ "$USE_HDFS" = "1" ]; then
-  # Hadoop 설정에서 HDFS NameNode 주소를 읽어온다. 예: hdfs://host:8020
+  # Hadoop 설정에서 HDFS NameNode 주소를 읽어온다.
   HDFS_URI="$(hdfs getconf -confKey fs.defaultFS)"
   HDFS_URI="${HDFS_URI%/}"
 

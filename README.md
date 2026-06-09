@@ -244,49 +244,8 @@ USE_HDFS=1 bash run_pipeline.sh
 USE_HDFS=1 PYTHON_BIN=/usr/bin/python3.6 bash run_pipeline.sh
 ```
 
-## 8. HDP Sandbox 문제 해결
 
-### `SyntaxError: invalid syntax`가 f-string 줄에서 발생하는 경우
-
-`spark-submit` 또는 `python` 명령이 Python 2.7을 사용하고 있을 가능성이 높다.
-
-```bash
-python --version
-python3.6 --version
-export PYSPARK_PYTHON=/usr/bin/python3.6
-export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
-```
-
-직접 실행할 때는 `python` 대신 `python3.6`을 사용한다.
-
-### `UnicodeEncodeError: 'ascii' codec can't encode characters`가 발생하는 경우
-
-샌드박스 터미널 출력 인코딩이 ASCII로 잡힌 경우이다.
-
-```bash
-export PYTHONIOENCODING=utf-8
-```
-
-### `Path does not exist: file:/user/...`가 발생하는 경우
-
-Spark가 HDFS 경로를 로컬 파일 경로로 해석한 것이다. HDFS 기본 주소를 붙여 실행한다.
-
-```bash
-HDFS_URI=$(hdfs getconf -confKey fs.defaultFS)
-echo $HDFS_URI
-```
-
-### `Incomplete HDFS URI, no host`가 발생하는 경우
-
-`hdfs:///user/...`처럼 NameNode 주소가 빠진 경우이다. `hdfs getconf -confKey fs.defaultFS` 결과를 앞에 붙여야 한다.
-
-```bash
-spark-submit data_preprocessing.py \
-  --input "$HDFS_URI/user/$USER/brfss/raw/part_*.csv" \
-  --output "$HDFS_URI/user/$USER/brfss/cleaned_cardio_data"
-```
-
-## 9. 현재 구현 상태
+## 8. 현재 구현 상태
 
 완료된 항목:
 
@@ -305,11 +264,11 @@ spark-submit data_preprocessing.py \
 - HDP Sandbox에서 HDFS 업로드, 전처리, 분석 및 시각화 실행 검증
 
 
-## 10. 기대 결과
+## 9. 기대 결과
 
 본 프로젝트를 통해 연령대와 주요 건강 위험요인이 심근경색 경험 비율에 어떤 영향을 주는지 정량적으로 확인한다. 특히 단일 위험요인보다 여러 위험요인이 동시에 존재할 때 심근경색 경험 비율이 어떻게 달라지는지 분석하여 예방 관점의 인사이트를 도출하는 것을 목표로 한다.
 
-## 11. 참고 자료
+## 10. 참고 자료
 
 - 데이터셋 및 원천 자료
   - Kaggle BRFSS Dataset: https://www.kaggle.com/datasets/cdc/behavioral-risk-factor-surveillance-system
@@ -334,6 +293,6 @@ spark-submit data_preprocessing.py \
   - Matplotlib Documentation: https://matplotlib.org/stable/
   - Seaborn Documentation: https://seaborn.pydata.org/
 
-## 12. AI Tool Usage
+## 11. AI Tool Usage
 
 - ChatGPT/Codex: 참고 자료 탐색, Sandbox 환경에서 발생한 파이썬 버전 관련 오류 디버깅, 프로젝트 파이프라인 최적화, 시각화 자료 가독성 향상 방안 제시, README 구조 점검

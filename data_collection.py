@@ -10,6 +10,9 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 from brfss_config import DATA_DIR, DATASET, DEFAULT_HDFS_RAW_DIR, SELECTED_COLUMNS
 
 
+YEAR_FILE_PATTERN = re.compile(r"^(\d{4})")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="BRFSS Kaggle 데이터 수집 스크립트")
     parser.add_argument("--skip-download", action="store_true", help="이미 파일이 존재하면 다운로드 생략")
@@ -41,8 +44,15 @@ def download_dataset(data_dir):
 def find_year_csvs(data_dir):
     return sorted(
         path for path in data_dir.glob("*.csv")
-        if re.match(r"^\d{4}", path.name)
+        if YEAR_FILE_PATTERN.match(path.name)
     )
+
+
+def get_year_from_filename(csv_file):
+    match = YEAR_FILE_PATTERN.match(csv_file.name)
+    if not match:
+        raise ValueError(f"연도 정보를 찾을 수 없는 파일명입니다: {csv_file.name}")
+    return match.group(1)
 
 
 def keep_analysis_columns(chunk, year):
@@ -53,29 +63,37 @@ def keep_analysis_columns(chunk, year):
     return chunk[available_cols]
 
 
+def iter_csv_chunks(csv_file, chunk_size):
+    reader = pd.read_csv(csv_file, chunksize=chunk_size, low_memory=False)
+    try:
+        yield from reader
+    finally:
+        reader.close()
+
+
+def reached_chunk_limit(index, chunk_limit):
+    return chunk_limit is not None and index > chunk_limit
+
+
 def split_csv_files(data_dir, chunk_size, max_chunks):
     csv_files = find_year_csvs(data_dir)
     if not csv_files:
-        print("분할할 연도별 원본 CSV가 없습니다. 이미 part_*.csv가 있으면 이 단계는 건너뜁니다.")
+        print("분할할 연도별 원본 CSV가 없습니다.")
         return
 
     chunk_limit = None if max_chunks == 0 else max_chunks
 
     for csv_file in csv_files:
-        year = re.match(r"^(\d{4})", csv_file.name).group(1)
+        year = get_year_from_filename(csv_file)
         print(f"[{year}년 데이터 분할 중]")
 
-        chunk_reader = pd.read_csv(csv_file, chunksize=chunk_size, low_memory=False)
-        try:
-            for idx, chunk in enumerate(chunk_reader, start=1):
-                if chunk_limit is not None and idx > chunk_limit:
-                    break
+        for idx, chunk in enumerate(iter_csv_chunks(csv_file, chunk_size), start=1):
+            if reached_chunk_limit(idx, chunk_limit):
+                break
 
-                output_file = data_dir / f"part_{year}_{idx}.csv"
-                keep_analysis_columns(chunk, year).to_csv(output_file, index=False)
-                print("저장 완료:", output_file.name)
-        finally:
-            chunk_reader.close()
+            output_file = data_dir / f"part_{year}_{idx}.csv"
+            keep_analysis_columns(chunk, year).to_csv(output_file, index=False)
+            print("저장 완료:", output_file.name)
 
         csv_file.unlink()
 

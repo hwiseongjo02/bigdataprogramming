@@ -171,6 +171,26 @@ def run_advanced_sql_analysis(spark, output_dir):
     )
 
 
+def create_spark_session():
+    spark = SparkSession.builder.appName("BRFSS_Analysis").getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR")
+    return spark
+
+
+def load_cardio_data(spark, input_path):
+    df = spark.read.csv(input_path, header=True, inferSchema=True)
+    df.createOrReplaceTempView("cardio")
+    return df
+
+
+def run_analysis_pipeline(spark, input_path, output_dir, bmi_sample_size):
+    df = load_cardio_data(spark, input_path)
+    run_basic_sql_analyses(spark, output_dir)
+    save_bmi_distribution(df, output_dir, bmi_sample_size)
+    run_advanced_sql_analysis(spark, output_dir)
+    run_logistic_regression(df, output_dir)
+
+
 def main():
     args = parse_args()
     input_path = normalize_input_path(args.input)
@@ -180,18 +200,12 @@ def main():
     set_korean_font()
     print("Spark SQL 분석 & 시각화 시작")
 
-    spark = SparkSession.builder.appName("BRFSS_Analysis").getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR")
+    spark = create_spark_session()
+    try:
+        run_analysis_pipeline(spark, input_path, output_dir, args.bmi_sample_size)
+    finally:
+        spark.stop()
 
-    df = spark.read.csv(input_path, header=True, inferSchema=True)
-    df.createOrReplaceTempView("cardio")
-
-    run_basic_sql_analyses(spark, output_dir)
-    save_bmi_distribution(df, output_dir, args.bmi_sample_size)
-    run_advanced_sql_analysis(spark, output_dir)
-    run_logistic_regression(df, output_dir)
-
-    spark.stop()
     print("모든 분석 및 시각화 작업 종료")
 
 

@@ -11,6 +11,15 @@ from brfss_config import DATA_DIR, SELECTED_COLUMNS
 INPUT_PATH = f"{DATA_DIR}/part_*.csv"
 OUTPUT_PATH = f"{DATA_DIR}/cleaned_cardio_data"
 
+RISK_COLUMN_RULES = {
+    "BP_Risk": ("BPHIGH4", 1, 3),
+    "Cholesterol_Risk": ("TOLDHI2", 1, 2),
+    "Diabetes_Risk": ("DIABETE3", 1, 3),
+    "Smoking_Risk": ("SMOKE100", 1, 2),
+}
+
+RISK_COLUMNS = list(RISK_COLUMN_RULES)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="BRFSS 데이터 전처리 스크립트")
@@ -48,6 +57,13 @@ def convert_to_binary(column_name, yes_val, no_val):
     return when(col(column_name) == yes_val, 1).when(col(column_name) == no_val, 0)
 
 
+def add_missing_columns(df):
+    for column_name in SELECTED_COLUMNS:
+        if column_name not in df.columns:
+            df = df.withColumn(column_name, lit(None))
+    return df
+
+
 def read_one_file(spark, file_path):
     df = spark.read.csv(file_path, header=True, inferSchema=True)
     df = df.withColumn(
@@ -55,10 +71,7 @@ def read_one_file(spark, file_path):
         regexp_extract(input_file_name(), r"part_(\d{4})_", 1).cast("int"),
     )
 
-    for column_name in SELECTED_COLUMNS:
-        if column_name not in df.columns:
-            df = df.withColumn(column_name, lit(None))
-
+    df = add_missing_columns(df)
     return df.select([col(column_name) for column_name in SELECTED_COLUMNS])
 
 
@@ -75,15 +88,25 @@ def add_analysis_columns(df):
     df = df.withColumn("Has_Disease", when(col("CVDINFR4") == 1, 1).otherwise(0))
     df = df.withColumn("BMI_Real", col("_BMI5") / 100)
 
-    df = df.withColumn("BP_Risk", convert_to_binary("BPHIGH4", 1, 3))
-    df = df.withColumn("Cholesterol_Risk", convert_to_binary("TOLDHI2", 1, 2))
-    df = df.withColumn("Diabetes_Risk", convert_to_binary("DIABETE3", 1, 3))
-    df = df.withColumn("Smoking_Risk", convert_to_binary("SMOKE100", 1, 2))
+    for output_col, (source_col, yes_val, no_val) in RISK_COLUMN_RULES.items():
+        df = df.withColumn(output_col, convert_to_binary(source_col, yes_val, no_val))
 
-    return df.withColumn(
-        "Risk_Score",
-        col("BP_Risk") + col("Cholesterol_Risk") + col("Diabetes_Risk") + col("Smoking_Risk"),
-    )
+    risk_score = reduce(lambda left, right: left + right, [col(name) for name in RISK_COLUMNS])
+    return df.withColumn("Risk_Score", risk_score)
+
+
+def read_input_data(spark, input_paths):
+    input_files = list_input_files(spark, input_paths)
+    print("읽을 파일 개수:", len(input_files))
+    if not input_files:
+        raise ValueError("입력 CSV 파일을 찾지 못했습니다.")
+
+    raw_dfs = [read_one_file(spark, file_path) for file_path in input_files]
+    return reduce(lambda left, right: left.unionByName(right), raw_dfs)
+
+
+def clean_disease_rows(df):
+    return df.dropna(subset=["CVDINFR4"]).filter(col("CVDINFR4").isin([1, 2]))
 
 
 def main():
@@ -94,19 +117,10 @@ def main():
     spark.sparkContext.setLogLevel("ERROR")
 
     print("1. 원본 데이터 불러오는 중")
-    input_files = list_input_files(spark, args.input)
-    print("읽을 파일 개수:", len(input_files))
-    if not input_files:
-        raise ValueError("입력 CSV 파일을 찾지 못했습니다.")
-
-    raw_dfs = [read_one_file(spark, file_path) for file_path in input_files]
-    df_raw = reduce(lambda left, right: left.unionByName(right), raw_dfs)
-    df_raw = cast_columns(df_raw)
+    df_raw = cast_columns(read_input_data(spark, args.input))
 
     print("2. 결측치 및 타겟 변수 정제 진행")
-    df_clean = df_raw.dropna(subset=["CVDINFR4"])
-    df_clean = df_clean.filter(col("CVDINFR4").isin([1, 2]))
-    df_clean = add_analysis_columns(df_clean)
+    df_clean = add_analysis_columns(clean_disease_rows(df_raw))
 
     print("연도별 정제 데이터 건수")
     df_clean.groupBy("YEAR").count().orderBy("YEAR").show()

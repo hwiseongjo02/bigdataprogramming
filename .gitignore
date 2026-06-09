@@ -1,27 +1,26 @@
-﻿# Python
+﻿# Python 관련
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 
-# Kaggle credentials
+# Kaggle 관련
 kaggle.json
 .kaggle/
 
-# Large raw / processed data
+# 데이터 원본 파일
 /data/part_*.csv
 /data/*.zip
 /data/*_formats.json
 /data/cleaned_cardio_data/
 /data/analysis_results/
 
-# Spark/Hadoop local artifacts
+# Spark/Hadoop 로컬 관련
 _SUCCESS
 *.crc
 .metastore_db/
 derby.log
 spark-warehouse/
 
-# Keep data documentation and optional small samples
 !/data/README.md
 !/data/sample_*.csv
