@@ -7,7 +7,7 @@
 
 본 프로젝트는 Kaggle에 공개된 CDC BRFSS(Behavioral Risk Factor Surveillance System) 데이터를 활용하여 심근경색 경험 여부와 주요 건강 위험요인 사이의 관계를 분석하는 빅데이터 처리 및 분석 프로젝트이다.
 
-BRFSS 데이터는 미국 성인을 대상으로 수집된 대규모 건강 설문 데이터로, 연도별 CSV 파일의 누적 용량이 100MB를 넘고 다양한 위험 요소 컬럼을 가지고 있기 떄문에
+BRFSS 데이터는 미국 성인을 대상으로 수집된 대규모 건강 설문 데이터로, 연도별 CSV 파일의 누적 용량이 100MB를 넘고 다양한 위험 요소 컬럼을 가지고 있기 때문에
 본 프로젝트의 주제로 선정하게 되었다.
 
 ## 2. 문제 정의
@@ -215,13 +215,13 @@ spark-submit data_visualization.py \
 
 주요 결과 파일:
 
-- `analysis_age_disease_rate.csv`, `plot1_age.png`
-- `analysis_blood_pressure_disease_rate.csv`, `plot2_blood_pressure.png`
-- `analysis_risk_score_disease_rate.csv`, `plot3_risk_score.png`
-- `analysis_year_disease_rate.csv`, `plot4_year.png`
-- `analysis_bmi_distribution_sample.csv`, `plot5_bmi_distribution.png`
-- `analysis_age_risk_matrix.csv`, `plot6_age_risk_heatmap.png`
-- `analysis_model_metrics.csv`, `analysis_model_coefficients.csv`, `plot7_model_coefficients.png`
+- analysis_age_disease_rate.csv, plot1_age.png
+- analysis_blood_pressure_disease_rate.csv, plot2_bp.png
+- analysis_bmi_distribution_sample.csv, plot3_bmi.png
+- analysis_risk_score_disease_rate.csv, plot4_risk_factors.png
+- analysis_year_disease_rate.csv, plot5_year.png
+- analysis_age_risk_matrix.csv, plot6_age_risk_heatmap.png
+- analysis_model_metrics.csv, analysis_model_coefficients.csv, plot7_model_coefficients.png
 
 ### 7.7 전체 파이프라인 자동 실행
 
